@@ -1,9 +1,19 @@
+import os
+import random
 import uuid
-from fastapi import FastAPI, HTTPException, Query
+import cv2
+import openai
+from fastapi import BackgroundTasks, FastAPI, HTTPException, File, Query, UploadFile, Form
 from pymongo import MongoClient
+from io import BytesIO
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Depends
 from pymongo.server_api import ServerApi
+import base64
+from fastapi.responses import JSONResponse, StreamingResponse
+import requests
+from typing import Optional
+from pydantic import BaseModel
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from passlib.context import CryptContext
@@ -11,6 +21,10 @@ from datetime import datetime
 from jose import JWTError, jwt
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from datetime import timedelta
+import json
+from io import BytesIO
+from pymongo import MongoClient
+from openai import OpenAI
 
 
 SECRET_KEY = "secret"
@@ -140,92 +154,90 @@ def create_chat(email: str = Query(..., description="Recipient's email"),user_id
     result = chatcollection.insert_one(new_chat)
     return {"message": "Chat created successfully.", "chatId": str(result.inserted_id)}
 
-@app.get("/chat-history/")
-async def return_history(user_id: str = Depends(get_current_user), other_user_id: str = Query(...)):
-    
-    chat = chatcollection.find_one({
-        "participants.userId": {"$all": [user_id, other_user_id]}
-    })
 
-    if not chat:
-        raise HTTPException(status_code=404, detail="Chat history not found")
+@app.post("/export_and_upload")
+def export_and_upload_to_vector_store(user_id_1: str = Query(...), user_id_2: str = Query(...)):
+    def export_to_json():
+        data = list(chatcollection.find({
+            "participants.userId": {"$all": [user_id_1, user_id_2]}
+        }))
 
-    return {
-        "chatId": str(chat["_id"]),
-        "messages": chat["messages"]
-    }
-MODEL = "llama3.2"
-openai = openai.OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+        for item in data:
+            item['_id'] = str(item['_id'])
 
-tones = ["Paranoid", "Frustrated", "Sarcastic","Shakespearean","Sad", "Formal","Over-the-Top Dramatic","Fake Cheerful Madness","Chaotic Villain","Descriptive"]
+        def json_serializer(obj):
+            if isinstance(obj, datetime):
+                return obj.isoformat()
+            raise TypeError(f"Type {type(obj)} not serializable")
 
+        json_bytes = json.dumps(data, default=json_serializer).encode('utf-8')
+        return BytesIO(json_bytes)
 
-@app.post("/send-message/")
-async def send_message(user_id: str = Depends(get_current_user),other_user_id: str = Query(...),text: str = Query(...)):
-    
-    boolean=[True,False]
-    tone = random.choice(tones)
-    chaos=random.choice(boolean)
-
-    try:
-        response = openai.chat.completions.create(
-        model=MODEL,
-        messages = [
-        {
-        "role": "system",
-        "content": (
-            "You are an assistant that rewrites text messages in a different tone without altering their meaning. "
-            "Ensure that your response contains only the rewritten message and nothing else. "
-            "Do not provide explanations, introductions, or responses that interpret the message as part of a conversation."
+    def create_file(file_contents):
+        client = OpenAI()
+        file3 = client.files.create(
+            file=("data.json", file_contents, "application/json"),
+            purpose="assistants"
         )
-        },
-        {
-        "role": "user",
-        "content": f"Rewrite the following message in a completely {tone} tone while keeping its meaning unchanged. "
-                   f"Do not add explanations, and do not reply to the message—just rewrite it: \"{text}\""
-        }
-        ],
+        return file3
+
+    def create_and_upload_vector_store_file(file_id):
+        client = OpenAI()
+        vector_store_id = 'vs_67ca8600e3f4819181f166cbd3dbb418'
+        
+        vector_store_files = client.beta.vector_stores.files.list(vector_store_id=vector_store_id)
+        for vector_store_file in vector_store_files:
+            client.beta.vector_stores.files.delete(
+                vector_store_id=vector_store_id,
+                file_id=vector_store_file.id
+            )
+        
+        vector_store_file = client.beta.vector_stores.files.create(
+            vector_store_id=vector_store_id,
+            file_id=file_id
         )
+        return vector_store_file
 
-        transformed_message = response.choices[0].message.content
+    json_file_contents = export_to_json()
+    created_file = create_file(json_file_contents)
+    vector_store_file = create_and_upload_vector_store_file(created_file.id)
 
-        chat = chatcollection.find_one({
-            "participants.userId": {"$all": [user_id, other_user_id]}
-        })
+    client = OpenAI()
+    assistant = client.beta.assistants.create(
+        name="Personal Helper",
+        instructions="You are given  a file with the chat history of two users. Read their conversation carefully and generate a response to the last message that maintains the same tone and style but introduces an element of confusion. The response should feel natural within the context of the conversation, making the other user question whether it was genuinely sent by the original participant. It should not be random or obviously AI-generated but subtly strange enough to create confusion. The generated response should be based on the previous texts between the users. Do not include any explanations—only output the generated text.",
+        model="gpt-4o",
+        tools=[{"type": "file_search"}],
+    )
 
-        if not chat:
-            raise HTTPException(status_code=404, detail="Chat not found")
+    assistant = client.beta.assistants.update(
+        assistant_id=assistant.id,
+        tool_resources={"file_search": {"vector_store_ids": ['vs_67ca8600e3f4819181f166cbd3dbb418']}}
+    )
 
-        if chaos is True:
-            new_message = {
-            "userId": user_id,
-            "text": transformed_message, 
-            "timestamp": datetime.utcnow()
-            }
-        else:
-            new_message = {
-            "userId": user_id,
-            "text": text,
-            "timestamp": datetime.utcnow()
-            }
+    thread = client.beta.threads.create(
+        messages=[
+            {"role": "assistant",  "content": "You are given  a file with the chat history of two users. Read their conversation carefully and generate a response to the last message that maintains the same tone and style but introduces an element of confusion. The response should feel natural within the context of the conversation, making the other user question whether it was genuinely sent by the original participant. It should not be random or obviously AI-generated but subtly strange enough to create confusion. The generated response should be based on the previous texts between the users. Do not include any explanations—only output the generated text."},
+            {"role": "user",  "content": "You are given  a file with the chat history of two users. Read their conversation carefully and generate a response to the last message that maintains the same tone and style but introduces an element of confusion. The response should feel natural within the context of the conversation, making the other user question whether it was genuinely sent by the original participant. It should not be random or obviously AI-generated but subtly strange enough to create confusion. The generated response should be based on the previous texts between the users. Do not include any explanations—only output the generated text."},
+        ]
+    )
 
-        chatcollection.update_one(
-            {"_id": chat["_id"]},
-            {
-                "$push": {"messages": new_message},
-                "$set": {"lastUpdated": datetime.utcnow()}
-            }
+    run = client.beta.threads.runs.create_and_poll(
+        thread_id=thread.id,
+        assistant_id=assistant.id,
+        instructions="You are given  a file with the chat history of two users. Read their conversation carefully and generate a response to the last message that maintains the same tone and style but introduces an element of confusion. The response should feel natural within the context of the conversation, making the other user question whether it was genuinely sent by the original participant. It should not be random or obviously AI-generated but subtly strange enough to create confusion. The generated response should be based on the previous texts between the users. Do not include any explanations—only output the generated text.",
+    )
+
+    if run.status == 'completed':
+        messages = client.beta.threads.messages.list(
+            thread_id=thread.id,
+            run_id=run.id
         )
+        answer = messages.data[0].content[0].text.value
+        return {"response": answer}
+    else:
+        return {"error": "Run did not complete successfully"}
 
-        return {
-            "original_message": text,
-            "transformed_message": transformed_message,
-            "tone_applied": tone,
-            "status": "Message sent successfully"
-        }
-
-    except Exception as e:
-        return {"error": str(e)}
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
