@@ -43,6 +43,25 @@ class ConnectionManager:
             del self.active_connections[username]
             print(f"❌ {username} left the chat.")
 
+    async def transform_message(self, message: str, tone: str):
+            
+        """Uses OpenAI to change the tone of the message correctly."""
+        try:
+            response = openai.chat.completions.create(
+                model=MODEL,
+                messages=[
+                    {"role": "system", "content": f"Rewrite the following message in a {tone} tone without changing its meaning."},
+                    {"role": "user", "content": message},
+                ],
+            )
+            transformed_message = response.choices[0].message.content  # ✅ Corrected syntax
+            print(f"🔄 Transformed Message: {transformed_message}")
+            return transformed_message.strip()
+        except Exception as e:
+            print(f"❌ Error transforming message: {e}")
+            return message  # Return original message if transformation fails
+
+
     async def send_private_message(self, sender: str, message: str):
         """Sends a private message from sender to a randomly selected recipient with a transformed tone."""
         recipient = self.get_random_user(sender)
@@ -71,5 +90,24 @@ class ConnectionManager:
 
         except Exception as e:
             print(f"❌ Error sending message: {e}")
+
+    def get_random_user(self, sender_username: str):
+        """Selects a truly random user from active connections excluding the sender."""
+        users = [user for user in self.active_connections.keys() if user != sender_username]
+        if users:
+            selected = random.choice(users)
+            print(f"🎯 Randomly selected recipient: {selected}")
+            return selected
+        return None
+
+@app.websocket("/ws/{username}")
+async def websocket_endpoint(websocket: WebSocket, username: str):
+    await manager.connect(websocket, username)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await manager.send_private_message(username, data)
+    except WebSocketDisconnect:
+        manager.disconnect(username)
 
 manager = ConnectionManager()
