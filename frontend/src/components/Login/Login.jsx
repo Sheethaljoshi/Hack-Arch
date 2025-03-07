@@ -1,6 +1,5 @@
 /* eslint-disable no-unused-vars */
-import { useState } from "react";
-import axios from "axios";  // Import Axios
+import { useState } from "react"; // Import Axios
 import { motion } from "framer-motion";
 import { FaUser, FaLock } from "react-icons/fa";
 import axios from "axios";
