@@ -109,6 +109,36 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
     return {"message": "Login successful" ,"access_token": access_token, "token_type": "bearer"}
 
+@app.post("/create-chat")
+def create_chat(email: str = Query(..., description="Recipient's email"),user_id: str = Depends(get_current_user)):
+    recipient = usercollection.find_one({"email": email})
+    
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Recipient user does not exist.")
+    
+    recipient_user_id = recipient["userId"]
+    
+    existing_chat = chatcollection.find_one({
+        "participants": {"$all": [
+            {"userId": user_id},
+            {"userId": recipient_user_id}
+        ]}
+    })
+    
+    if existing_chat:
+        return {"message": "Chat already exists.", "chatId": str(existing_chat["_id"])}
+    
+    new_chat = {
+        "participants": [
+            {"userId": user_id},
+            {"userId": recipient_user_id}
+        ],
+        "messages": [],
+        "lastUpdated": datetime.utcnow()
+    }
+    
+    result = chatcollection.insert_one(new_chat)
+    return {"message": "Chat created successfully.", "chatId": str(result.inserted_id)}
 
 if __name__ == "__main__":
     import uvicorn
