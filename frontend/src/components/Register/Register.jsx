@@ -1,13 +1,30 @@
+/* eslint-disable no-unused-vars */
 import { useState } from "react";
 import { motion } from "framer-motion";
+import axios from "axios";  
 import { FaUser, FaLock, FaEnvelope } from "react-icons/fa";
 
 function Register() {
 const [formData, setFormData] = useState({ name: "", email: "", password: "" });
+const [error, setError] = useState("");
+const [successMessage, setSuccessMessage] = useState("");
 
 const handleChange = (e) => {
-      setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
+  setFormData({ ...formData, [e.target.name]: e.target.value });
+};
+
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError("");
+  setSuccessMessage("");
+
+  try {
+    const response = await axios.post("http://127.0.0.1:8000/register", formData);
+    setSuccessMessage(response.data.message);  // Show success message
+  } catch (err) {
+    setError(err.response?.data?.detail || "An error occurred");
+  }
+};
   
   return (
     <motion.div 
@@ -31,7 +48,7 @@ const handleChange = (e) => {
         >
           Register
         </motion.h2>
-        <form className="space-y-6">
+        <form className="space-y-6" onSubmit={handleSubmit}>
           <motion.div 
             whileFocus={{ scale: 1.1, rotate: 5 }}
             whileHover={{ x: [0, 5, -5, 5, 0] }}
@@ -92,7 +109,7 @@ const handleChange = (e) => {
           whileHover={{ scale: 1.1, rotate: [0, 5, -5, 5, 0] }}
           className="text-center text-sm mt-6"
         >
-          Already have an account? <a href="#" className="text-pink-300 hover:underline">Login</a>
+          Already have an account? <a href="/" className="text-pink-300 hover:underline">Login</a>
         </motion.p>
       </motion.div>
     </motion.div>
