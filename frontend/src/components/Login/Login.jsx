@@ -1,13 +1,49 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { FaUser, FaLock } from "react-icons/fa";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
+
+
 
 function Login() {
     const [formData, setFormData] = useState({ username: "", password: "" });
+    const [error, setError] = useState("");
+    const [loading, setLoading] = useState(false);
+    const navigate = useNavigate();
+
 
     const handleChange = (e) => {
       setFormData({ ...formData, [e.target.name]: e.target.value });
     };
+
+    const handleLogin = async (e) => {
+      e.preventDefault();
+      setLoading(true);
+      setError(""); 
+  
+      try {
+          const response = await axios.post("http://127.0.0.1:8000/login", 
+              new URLSearchParams({
+                  username: formData.username,
+                  password: formData.password
+              }), 
+              {
+                  headers: { "Content-Type": "application/x-www-form-urlencoded" }
+              }
+          );
+  
+          // Store the access token in localStorage
+          localStorage.setItem("token", response.data.access_token);
+          alert("Login Successful!");
+          navigate("/dashboard");
+      } catch (error) {
+          setError(error.response?.data?.detail || "Login failed");
+      } finally {
+          setLoading(false);
+      }
+  };
+  
 
     return (
         <motion.div 
@@ -32,7 +68,8 @@ function Login() {
           >
             Login
           </motion.h2>
-          <form className="space-y-6">
+          {error && <p className="text-red-400 text-center mb-4">{error}</p>}
+          <form onSubmit={handleLogin} className="space-y-6">
             <motion.div 
               whileFocus={{ scale: 1.05 }}
               whileHover={{ x: 5 }}
@@ -63,13 +100,15 @@ function Login() {
                 className="w-full pl-12 pr-4 py-3 bg-pink-600 text-white rounded-lg outline-none focus:ring-4 focus:ring-purple-400 border-2 border-pink-400"
               />
             </motion.div>
-            <motion.button
+            <motion.button disabled={loading}
               whileHover={{ scale: 1.15, rotate: 5, backgroundColor: "#ff6b6b" }}
               whileTap={{ scale: 0.9, rotate: -5 }}
               className="w-full bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 hover:from-orange-400 hover:to-purple-600 text-white py-3 rounded-lg font-bold text-lg transition-all duration-300 transform"
-            >
-              Login
+            > Login
             </motion.button>
+
+  
+
           </form>
           <motion.p 
             initial={{ y: 20, opacity: 0 }}

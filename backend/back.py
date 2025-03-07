@@ -241,7 +241,7 @@ def export_and_upload_to_vector_store(user_id_1: str = Query(...), user_id_2: st
         return {"error": "Run did not complete successfully"}
     
 @app.get("/user-chats")
-def get_user_chats(user_id: str = Query(..., description="User ID to search for")):
+def get_user_chats(user_id: str = Depends(get_current_user)):
     chats = chatcollection.find({"participants.userId": user_id})
     results = []
     
