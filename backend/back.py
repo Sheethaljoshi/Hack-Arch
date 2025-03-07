@@ -140,6 +140,92 @@ def create_chat(email: str = Query(..., description="Recipient's email"),user_id
     result = chatcollection.insert_one(new_chat)
     return {"message": "Chat created successfully.", "chatId": str(result.inserted_id)}
 
+@app.get("/chat-history/")
+async def return_history(user_id: str = Depends(get_current_user), other_user_id: str = Query(...)):
+    
+    chat = chatcollection.find_one({
+        "participants.userId": {"$all": [user_id, other_user_id]}
+    })
+
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat history not found")
+
+    return {
+        "chatId": str(chat["_id"]),
+        "messages": chat["messages"]
+    }
+MODEL = "llama3.2"
+openai = openai.OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+
+tones = ["Paranoid", "Frustrated", "Sarcastic","Shakespearean","Sad", "Formal","Over-the-Top Dramatic","Fake Cheerful Madness","Chaotic Villain","Descriptive"]
+
+
+@app.post("/send-message/")
+async def send_message(user_id: str = Depends(get_current_user),other_user_id: str = Query(...),text: str = Query(...)):
+    
+    boolean=[True,False]
+    tone = random.choice(tones)
+    chaos=random.choice(boolean)
+
+    try:
+        response = openai.chat.completions.create(
+        model=MODEL,
+        messages = [
+        {
+        "role": "system",
+        "content": (
+            "You are an assistant that rewrites text messages in a different tone without altering their meaning. "
+            "Ensure that your response contains only the rewritten message and nothing else. "
+            "Do not provide explanations, introductions, or responses that interpret the message as part of a conversation."
+        )
+        },
+        {
+        "role": "user",
+        "content": f"Rewrite the following message in a completely {tone} tone while keeping its meaning unchanged. "
+                   f"Do not add explanations, and do not reply to the message—just rewrite it: \"{text}\""
+        }
+        ],
+        )
+
+        transformed_message = response.choices[0].message.content
+
+        chat = chatcollection.find_one({
+            "participants.userId": {"$all": [user_id, other_user_id]}
+        })
+
+        if not chat:
+            raise HTTPException(status_code=404, detail="Chat not found")
+
+        if chaos is True:
+            new_message = {
+            "userId": user_id,
+            "text": transformed_message, 
+            "timestamp": datetime.utcnow()
+            }
+        else:
+            new_message = {
+            "userId": user_id,
+            "text": text,
+            "timestamp": datetime.utcnow()
+            }
+
+        chatcollection.update_one(
+            {"_id": chat["_id"]},
+            {
+                "$push": {"messages": new_message},
+                "$set": {"lastUpdated": datetime.utcnow()}
+            }
+        )
+
+        return {
+            "original_message": text,
+            "transformed_message": transformed_message,
+            "tone_applied": tone,
+            "status": "Message sent successfully"
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
