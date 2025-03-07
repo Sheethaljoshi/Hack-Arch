@@ -12,7 +12,7 @@ from pymongo.server_api import ServerApi
 import base64
 from fastapi.responses import JSONResponse, StreamingResponse
 import requests
-from typing import Optional
+from typing import Dict, Optional
 from pydantic import BaseModel
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
@@ -90,6 +90,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         return user_id
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+    
+
 
 
 # Register Endpoint (Query Parameters)
@@ -237,7 +239,36 @@ def export_and_upload_to_vector_store(user_id_1: str = Query(...), user_id_2: st
         return {"response": answer}
     else:
         return {"error": "Run did not complete successfully"}
+    
+@app.get("/user-chats")
+def get_user_chats(user_id: str = Query(..., description="User ID to search for")):
+    chats = chatcollection.find({"participants.userId": user_id})
+    results = []
+    
+    for chat in chats:
+        if chat["messages"]:
+            last_message = chat["messages"][-1]
+            
+            other_participant = next(
+                (p for p in chat["participants"] if p["userId"] != user_id),
+                None
+            )
+            
+            if other_participant:
+                other_user = usercollection.find_one({"userId": other_participant["userId"]})
+                other_name = other_user["name"] if other_user else "Unknown"
+                
+                results.append({
+                    "otherParticipant": other_name,
+                    "lastMessage": last_message["text"],
+                    "timestamp": last_message["timestamp"]
+                })
+    
+    return {"chats": results}
+
+
+    
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+            import uvicorn
+            uvicorn.run(app, host="127.0.0.1", port=8000)
