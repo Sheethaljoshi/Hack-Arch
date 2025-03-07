@@ -140,6 +140,21 @@ def create_chat(email: str = Query(..., description="Recipient's email"),user_id
     result = chatcollection.insert_one(new_chat)
     return {"message": "Chat created successfully.", "chatId": str(result.inserted_id)}
 
+@app.get("/chat-history/")
+async def return_history(user_id: str = Depends(get_current_user), other_user_id: str = Query(...)):
+    
+    chat = chatcollection.find_one({
+        "participants.userId": {"$all": [user_id, other_user_id]}
+    })
+
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat history not found")
+
+    return {
+        "chatId": str(chat["_id"]),
+        "messages": chat["messages"]
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
