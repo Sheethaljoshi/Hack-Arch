@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict
@@ -5,6 +6,10 @@ import random
 import asyncio
 from openai import OpenAI  # Added OpenAI for tone transformation
 from dotenv import load_dotenv
+
+import os
+load_dotenv()
+
 
 app = FastAPI()
 
@@ -111,5 +116,3 @@ async def websocket_endpoint(websocket: WebSocket, username: str):
         manager.disconnect(username)
 
 manager = ConnectionManager()
-
-

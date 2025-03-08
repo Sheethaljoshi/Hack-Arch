@@ -190,7 +190,7 @@ def export_and_upload_to_vector_store(user_id_1: str = Query(...), user_id_2: st
 
     def create_and_upload_vector_store_file(file_id):
         client = OpenAI()
-        vector_store_id = 'vs_67ca8600e3f4819181f166cbd3dbb418'
+        vector_store_id = 'vs_67cb9f3efafc81918f44637bee8c2029'
         
         vector_store_files = client.beta.vector_stores.files.list(vector_store_id=vector_store_id)
         for vector_store_file in vector_store_files:
