@@ -1,8 +1,21 @@
+/* eslint-disable no-unused-vars */
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { FaPaperPlane } from "react-icons/fa";
+import { FaUser, FaLock, FaEnvelope, FaPaperPlane } from "react-icons/fa";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+
 
 function Dashboard() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+          navigate("/");
+      }
+  }, [navigate]);
+
   const [messages, setMessages] = useState([
     { sender: "John", text: "Hey, how's it going?" },
     { sender: "You", text: "Pretty good! What's up?" },

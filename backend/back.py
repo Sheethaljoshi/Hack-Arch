@@ -25,6 +25,7 @@ import json
 from io import BytesIO
 from pymongo import MongoClient
 from openai import OpenAI
+from pydantic import BaseModel
 
 
 SECRET_KEY = "secret"
@@ -90,22 +91,26 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         return user_id
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-    
-
 
 
 # Register Endpoint (Query Parameters)
+
+class RegisterRequest(BaseModel):  # ✅ Define a model for request data
+    name: str
+    email: str
+    password: str
+
 @app.post("/register")
-async def register(name: str, email: str, password: str):
-    existing_user = usercollection.find_one({"email": email})
+async def register(user: RegisterRequest):  # ✅ Accept JSON input
+    existing_user = usercollection.find_one({"email": user.email})
     if existing_user:
-        raise HTTPException(status_code=400, detail="User already created with this email")
+        raise HTTPException(status_code=400, detail="User already created with this email!")
     
     user_id = str(uuid.uuid4())
-    hashed_password = hash_password(password)
+    hashed_password = hash_password(user.password)
     user_doc = {
-        "name": name,
-        "email": email,
+        "name": user.name,
+        "email": user.email,
         "passwordHash": hashed_password,
         "userId": user_id,
         "createdAt": datetime.utcnow()
@@ -241,7 +246,7 @@ def export_and_upload_to_vector_store(user_id_1: str = Query(...), user_id_2: st
         return {"error": "Run did not complete successfully"}
     
 @app.get("/user-chats")
-def get_user_chats(user_id: str = Query(..., description="User ID to search for")):
+def get_user_chats(user_id: str = Depends(get_current_user)):
     chats = chatcollection.find({"participants.userId": user_id})
     results = []
     
