@@ -1,6 +1,5 @@
 /* eslint-disable no-unused-vars */
 import { useState } from "react";
-import axios from "axios";  // Import Axios
 import { motion } from "framer-motion";
 import { FaUser, FaLock } from "react-icons/fa";
 import axios from "axios";
@@ -14,6 +13,13 @@ function Login() {
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
+    const validateForm = () => {
+      if (!formData.username.trim() || !formData.password.trim()) {
+        setError("Username and Password are required!");
+        return false;
+      }
+      return true;
+    };
 
     const handleChange = (e) => {
       setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -22,8 +28,12 @@ function Login() {
     const handleLogin = async (e) => {
       e.preventDefault();
       setLoading(true);
-      setError(""); 
-  
+      setError("");
+
+      if (!validateForm()) {
+        setLoading(false);
+        return; 
+      }
       try {
           const response = await axios.post("http://127.0.0.1:8000/login", 
               new URLSearchParams({
@@ -40,7 +50,7 @@ function Login() {
           alert("Login Successful!");
           navigate("/dashboard");
       } catch (error) {
-          setError(error.response?.data?.detail || "Login failed");
+          setError(error.response?.data?.detail || "Login failed!");
       } finally {
           setLoading(false);
       }
@@ -70,7 +80,7 @@ function Login() {
           >
             Login
           </motion.h2>
-          {error && <p className="text-red-400 text-center mb-4">{error}</p>}
+          {error && <p className="text-red-700 text-center mb-4">{error}</p>}
           <form onSubmit={handleLogin} className="space-y-6">
             <motion.div 
               whileFocus={{ scale: 1.05 }}
@@ -119,7 +129,7 @@ function Login() {
             whileHover={{ scale: 1.1, color: "#ff6b6b" }}
             className="text-center text-sm mt-6"
           >
-            Don't have an account? <a href="#" className="text-pink-300 hover:underline">Register</a>
+            Don't have an account? <a href="register" className="text-pink-300 hover:underline">Register</a>
           </motion.p>
         </motion.div>
       </motion.div>

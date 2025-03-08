@@ -3,28 +3,46 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import axios from "axios";  
 import { FaUser, FaLock, FaEnvelope } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
 
 function Register() {
 const [formData, setFormData] = useState({ name: "", email: "", password: "" });
 const [error, setError] = useState("");
 const [successMessage, setSuccessMessage] = useState("");
+const navigate = useNavigate();
 
 const handleChange = (e) => {
   setFormData({ ...formData, [e.target.name]: e.target.value });
 };
 
+const validateForm = () => {
+  if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim()) {
+    setError("All fields are required!");
+    return false;
+  }
+  return true;
+};
+
 const handleSubmit = async (e) => {
+
   e.preventDefault();
   setError("");
   setSuccessMessage("");
 
+  if (!validateForm()) return;
+
   try {
-    const response = await axios.post("http://127.0.0.1:8000/register", formData);
-    setSuccessMessage(response.data.message);  // Show success message
+    const response = await axios.post("http://127.0.0.1:8000/register", formData, {
+      headers: { "Content-Type": "application/json" }  // ✅ Ensure JSON format
+    });
+
+    setSuccessMessage(response.data.message);
+    setTimeout(() => navigate("/dashboard"), 1000);  // Show success message
   } catch (err) {
-    setError(err.response?.data?.detail || "An error occurred");
+    setError(err.response?.data?.detail || "An error has occurred!");
   }
 };
+
   
   return (
     <motion.div 
@@ -48,6 +66,9 @@ const handleSubmit = async (e) => {
         >
           Register
         </motion.h2>
+        {error && <p className="text-red-700 text-center font-semibold">{error}</p>}
+{successMessage && <p className="text-green-400 text-center font-semibold">{successMessage}</p>}
+
         <form className="space-y-6" onSubmit={handleSubmit}>
           <motion.div 
             whileFocus={{ scale: 1.1, rotate: 5 }}
